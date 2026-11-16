@@ -1,0 +1,6 @@
+# view AndroidManifest.xml #generated:25
+-keep class com.akn.MainActivity { <init>(...); }
+
+# view AndroidManifest.xml #generated:40
+-keep class com.akn.MenuService { <init>(...); }
+
