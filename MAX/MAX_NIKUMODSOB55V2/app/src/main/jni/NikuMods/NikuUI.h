@@ -80,10 +80,7 @@ ImFont* F19 = nullptr;
 float menu[4] = { 112 / 255.f, 163 / 255.f, 255 / 255.f, 1.000f };
 
 //---------------------------------------------------------------------------
-// Menu feature switches: every checkbox below points at the REAL hook toggle
-// from Struct/Class.h + Struct/Bools.h + Struct/Hooks.h + Struct/main.h (the
-// same translation unit as Main.cpp, so NikuUI.h sees them in scope directly).
-// The #ifdef NIKU_HARNESS block only feeds the headless test build.
+// Menu feature switches (default OFF saat pertama buka menu)
 //---------------------------------------------------------------------------
 #ifdef NIKU_HARNESS
 bool Enable = false;
@@ -92,7 +89,7 @@ bool SpeedHack = false;
 bool norecoil = false;
 bool HighFps = false;
 float Fov_Aim = 360.0f;
-int  AimWhen = 1;
+int  AimWhen = 0;
 bool Headshot = false;
 bool AutoSwap1 = false;
 bool SilentAimv222 = false;
@@ -113,6 +110,36 @@ bool infiniteFlyer = false;
 struct _cfg {
     struct _esp { bool Box; bool Line; bool Health; } ESP;
 } Config;
+#else
+// Pastikan nilai default OFF (aman) untuk toggle yang ada di UI
+inline void NikuForceDefaultsOffOnce() {
+    static bool done = false;
+    if (done) return;
+    done = true;
+    Enable = false;
+    Config.ESP.Line = false;
+    Config.ESP.Box = false;
+    Config.ESP.Health = false;
+    Headshot = false;
+    SpeedHack = false;
+    AutoSwap1 = false;
+    Aimbot = false;
+    AimWhen = 0;
+    SilentAimv222 = false;
+    Autofire = false;
+    norecoil = false;
+    ghostmapcs = false;
+    CoverKill = false;
+    FastSwitch = false;
+    HideDamage = false;
+    GuestResetZ = false;
+    gliderbac = false;
+    HighFps = false;
+    infiniteFlyer = false;
+    SpeedWalking = false;
+    EnemyCount = false;
+    GameTimer = false;
+}
 #endif
 
 //---------------------------------------------------------------------------
@@ -313,11 +340,17 @@ void NikuMenu()
                     draw->AddText(NULL, 25.f, ImVec2(pos.x + 330, pos.y + 114 + 2.5), ImColor(245, 255, 255, 255 / 2), OBFU("BASIC ESP MENU"));
                     ImGui::SetCursorPos(ImVec2(248, 176));
                     ImGui::MenuChild("ESP", ImVec2(440, 462)); {
+                        Enable = false;
+                        Config.ESP.Line = false;
+                        Config.ESP.Box = false;
+                        Config.ESP.Health = false;
+                        ImGui::BeginDisabled(true);
                         ImGui::Checkbox("Enable Funtion", &Enable);
                         ImGui::Checkbox("Show Line", &Config.ESP.Line);
                         ImGui::Checkbox("Show Box", &Config.ESP.Box);
                         ImGui::Checkbox("Show Health", &Config.ESP.Health);
                         ImGui::SliderFloat("FOV AIM", &Fov_Aim, 360.0f, 360.0f, "%.0f");
+                        ImGui::EndDisabled();
                     }
                     ImGui::EndChild();
                 }
@@ -327,9 +360,14 @@ void NikuMenu()
                     draw->AddText(NULL, 25.f, ImVec2(pos.x + 330, pos.y + 114 + 2.5), ImColor(245, 255, 255, 255 / 2), OBFU("BRUTAL MENU"));
                     ImGui::SetCursorPos(ImVec2(248, 176));
                     ImGui::MenuChild("World", ImVec2(440, 462)); {
+                        Headshot = false;
+                        SpeedHack = false;
+                        AutoSwap1 = false;
+                        ImGui::BeginDisabled(true);
                         ImGui::Checkbox("Headshot", &Headshot);
                         ImGui::Checkbox("SpeedHack", &SpeedHack);
                         ImGui::Checkbox("AUTO SWITCH", &AutoSwap1);
+                        ImGui::EndDisabled();
                     }
                     ImGui::EndChild();
                 }
@@ -350,14 +388,14 @@ void NikuMenu()
                     draw->AddText(NULL, 25.f, ImVec2(pos.x + 330, pos.y + 114 + 2.5), ImColor(245, 255, 255, 255 / 2), OBFU("AIMBOT,TRIGGERS AND SETTINGS"));
                     ImGui::SetCursorPos(ImVec2(248, 176));
                     ImGui::MenuChild("AimBot", ImVec2(440, 462)); {
-                        // AIM LOCKED OFF (tidak dihapus)
+                        // AIM LOCKED OFF (semua OFF saat buka menu)
                         Aimbot = false;
                         ImGui::BeginDisabled(true);
                         ImGui::Checkbox("Enable AimBot", &Aimbot);
                         static bool aimAlways = false, aimFire = false, aimScope = false;
-                        AimWhen = 1;
+                        AimWhen = 0;
                         aimAlways = false;
-                        aimFire   = true;
+                        aimFire   = false;
                         aimScope  = false;
                         ImGui::Checkbox("AimWhen", &aimAlways);
                         ImGui::Checkbox("AimFire", &aimFire);
@@ -372,9 +410,12 @@ void NikuMenu()
                     draw->AddText(NULL, 25.f, ImVec2(pos.x + 330, pos.y + 114 + 2.5), ImColor(245, 255, 255, 255 / 2), OBFU("BULLET-TRACK AND SETTINGS"));
                     ImGui::SetCursorPos(ImVec2(248, 176));
                     ImGui::MenuChild("Silent-Aim", ImVec2(440, 462)); {
-                        // AIM LOCKED OFF (tidak dihapus)
+                        // AIM/SILENT LOCKED OFF
                         SilentAimv222 = false;
                         Autofire = false;
+                        checkVisible2 = true;
+                        ignoreKnocked = true;
+                        ignoreEnemyBot = false;
                         ImGui::BeginDisabled(true);
                         ImGui::Checkbox("Enable SilentAim", &SilentAimv222);
                         ImGui::Checkbox("Visibility Check", &checkVisible2);
@@ -391,6 +432,10 @@ void NikuMenu()
                     draw->AddText(NULL, 25.f, ImVec2(pos.x + 330, pos.y + 114 + 2.5), ImColor(245, 255, 255, 255 / 2), OBFU("SUPER RISKY FEATURES"));
                     ImGui::SetCursorPos(ImVec2(248, 176));
                     ImGui::MenuChild("Memory", ImVec2(440, 462)); {
+                        norecoil = false; ghostmapcs = false; CoverKill = false; FastSwitch = false;
+                        HideDamage = false; GuestResetZ = false; gliderbac = false; HighFps = false;
+                        infiniteFlyer = false; SpeedWalking = false;
+                        ImGui::BeginDisabled(true);
                         ImGui::Checkbox("No Recoil", &norecoil);
                         ImGui::Checkbox("Ghost Map", &ghostmapcs);
                         ImGui::Checkbox("Cover Kill", &CoverKill);
@@ -401,6 +446,7 @@ void NikuMenu()
                         ImGui::Checkbox("90 FPS", &HighFps);
                         ImGui::Checkbox("Infinite Fly", &infiniteFlyer);
                         ImGui::Checkbox("Speed Walk", &SpeedWalking);
+                        ImGui::EndDisabled();
                     }
                     ImGui::EndChild();
                 }
