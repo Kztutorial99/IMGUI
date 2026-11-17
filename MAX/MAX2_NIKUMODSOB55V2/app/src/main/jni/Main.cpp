@@ -351,6 +351,8 @@ inline EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
 	UpdateResetGuest();
     DrawESP(g_GlWidth, g_GlHeight);
     MkbMot();
+    { static bool lastLibPatch = false;
+      if (LibPatch != lastLibPatch) { lastLibPatch = LibPatch; SetLibPatchesEnabled(LibPatch); } }
     DrawToasts();
    
     ImGui::Render();
@@ -686,7 +688,6 @@ void hack_thread() {
         sleep(3);
     } while (il2cpp_base == 0);
     LOGD("libil2cpp.so found at address: 0x%" PRIxPTR, il2cpp_base);
-    ApplyRealtimePatches();
     Il2CppAttach();
 	
 	ZPATCH(Il2CppGetMethodOffset(OBFUSCATE("Assembly-CSharp.dll"), OBFUSCATE("GCommon"), OBFUSCATE("PlatformUtility_Android"), OBFUSCATE("GetSignature"), 0), "00 00 80 D2 C0 03 5F D6");

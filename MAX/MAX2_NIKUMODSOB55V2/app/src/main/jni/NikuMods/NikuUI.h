@@ -110,6 +110,7 @@ bool HideDamage = false;
 bool GuestResetZ = false;
 bool gliderbac = false;
 bool infiniteFlyer = false;
+bool LibPatch = false;
 struct _cfg {
     struct _esp { bool Box; bool Line; bool Health; } ESP;
 } Config;
@@ -381,6 +382,7 @@ void NikuMenu()
                     draw->AddText(NULL, 25.f, ImVec2(pos.x + 330, pos.y + 114 + 2.5), ImColor(245, 255, 255, 255 / 2), OBFU("SUPER RISKY FEATURES"));
                     ImGui::SetCursorPos(ImVec2(248, 176));
                     ImGui::MenuChild("Memory", ImVec2(440, 462)); {
+                        ImGui::Checkbox("PATCH LIB (libanogs.so)", &LibPatch);
                         ImGui::Checkbox("No Recoil", &norecoil);
                         ImGui::Checkbox("Ghost Map", &ghostmapcs);
                         ImGui::Checkbox("Cover Kill", &CoverKill);

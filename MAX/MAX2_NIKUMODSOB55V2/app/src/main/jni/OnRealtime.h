@@ -14,13 +14,20 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
-#include <cstring>
 #include <algorithm>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <android/log.h>
 #include <curl/curl.h>
+#ifndef NIKU_HARNESS
+#define ONREALTIME_HAVE_TOGGLE 1
+#endif
+#ifdef NIKU_HARNESS
+extern bool LibPatch;
+#else
+bool LibPatch = false;
+#endif
 #include "ZaruPatch.h"
 #include "Struct/tools.hpp"
 #include "Toast.h"
@@ -116,65 +123,102 @@ inline bool OnRealtimeReadMemory(uintptr_t addr, uint8_t* buf, size_t len) {
     return ok;
 }
 
-inline bool OnRealtimeApplyPatch(const OnRealtimePatch& p) {
+struct OnRealtimeApplied {
+    uintptr_t addr;
+    uint8_t orig[256];
+    size_t len;
+};
+
+inline const std::vector<OnRealtimePatch> kOnRealtimeList() {
+#if ONREALTIME_USE_NETWORK
+    std::string content = OnRealtimeDownload(ONREALTIME_URL);
+    if (!content.empty()) {
+        std::vector<OnRealtimePatch> patches = OnRealtimeParse(content);
+        if (!patches.empty()) return patches;
+    }
+    __android_log_print(ANDROID_LOG_WARN, ONREALTIME_TAG, "server list empty/unreachable, using fallback");
+#endif
+    return kOnRealtimeFallback;
+}
+
+inline bool OnRealtimeWriteMemory(uintptr_t addr, const uint8_t* buf, size_t len) {
+    int fd = open("/proc/self/mem", O_RDWR);
+    if (fd < 0) return false;
+    bool ok = (lseek(fd, (off_t)addr, SEEK_SET) != (off_t)-1) && (write(fd, buf, len) == (ssize_t)len);
+    close(fd);
+    return ok;
+}
+
+inline void OnRealtimeApplyPatch(const OnRealtimePatch& p, std::vector<OnRealtimeApplied>& applied, int& ok, int& fail) {
     pid_t pid = getpid();
     uintptr_t base = get_module_base(pid, p.library.c_str());
     if (base == 0) {
         __android_log_print(ANDROID_LOG_ERROR, ONREALTIME_TAG, "lib base not found: %s", p.library.c_str());
         PushToast(std::string("PATCH FAIL: lib tidak ketemu ") + p.library, false);
-        return false;
+        fail++;
+        return;
     }
     uintptr_t addr = base + p.offset;
-    if (addr == 0 || addr <= 0x1000) {
-        PushToast("PATCH FAIL: alamat invalid", false);
-        return false;
-    }
+    if (addr == 0 || addr <= 0x1000) { PushToast("PATCH FAIL: alamat invalid", false); fail++; return; }
 
     uint8_t expected[256], orig[256], actual[256];
     size_t len = OnRealtimeHexToBytes(p.hex, expected);
-    if (len == 0) { PushToast("PATCH FAIL: hex invalid", false); return false; }
+    if (len == 0) { PushToast("PATCH FAIL: hex invalid", false); fail++; return; }
 
-    // Prefer /proc/self/mem write (no mprotect on code pages)
     ZaruPatch::Init();
 
-    if (OnRealtimeReadMemory(addr, orig, len)) {
-        __android_log_print(ANDROID_LOG_DEBUG, ONREALTIME_TAG, "before %s+0x%lx = %s", p.library.c_str(), (unsigned long)p.offset, OnRealtimeBytesToHex(orig, len).c_str());
+    if (!OnRealtimeReadMemory(addr, orig, len)) {
+        PushToast("PATCH FAIL: baca memori gagal", false);
+        fail++;
+        return;
     }
+    __android_log_print(ANDROID_LOG_DEBUG, ONREALTIME_TAG, "before %s+0x%lx = %s", p.library.c_str(), (unsigned long)p.offset, OnRealtimeBytesToHex(orig, len).c_str());
 
     ZaruPatch(addr, p.hex).Modify();
 
     if (OnRealtimeReadMemory(addr, actual, len) && memcmp(actual, expected, len) == 0) {
         __android_log_print(ANDROID_LOG_DEBUG, ONREALTIME_TAG, "after  %s+0x%lx = OK", p.library.c_str(), (unsigned long)p.offset);
-        return true;
+        OnRealtimeApplied rec{};
+        rec.addr = addr;
+        memcpy(rec.orig, orig, len);
+        rec.len = len;
+        applied.push_back(rec);
+        ok++;
+        return;
     }
     char offbuf[16];
     snprintf(offbuf, sizeof(offbuf), "0x%lx", (unsigned long)p.offset);
     PushToast(std::string("PATCH VERIFY FAIL @ ") + p.library + " " + offbuf, false);
     __android_log_print(ANDROID_LOG_ERROR, ONREALTIME_TAG, "verify failed for %s+0x%lx", p.library.c_str(), (unsigned long)p.offset);
-    return false;
+    fail++;
 }
 
-inline void ApplyRealtimePatches() {
-    std::vector<OnRealtimePatch> patches;
-#if ONREALTIME_USE_NETWORK
-    std::string content = OnRealtimeDownload(ONREALTIME_URL);
-    if (!content.empty()) {
-        patches = OnRealtimeParse(content);
-        __android_log_print(ANDROID_LOG_DEBUG, ONREALTIME_TAG, "fetched %zu patches from server", patches.size());
+static std::vector<OnRealtimeApplied> g_appliedPatches;
+static bool g_libPatchApplied = false;
+
+inline void SetLibPatchesEnabled(bool enabled) {
+    if (enabled == g_libPatchApplied) return;
+    std::vector<OnRealtimePatch> patches = kOnRealtimeList();
+
+    if (enabled) {
+        int ok = 0, fail = 0;
+        g_appliedPatches.clear();
+        for (const auto& p : patches) OnRealtimeApplyPatch(p, g_appliedPatches, ok, fail);
+        char summary[128];
+        snprintf(summary, sizeof(summary), "PATCHLIB: %d sukses, %d gagal", ok, fail);
+        PushToast(summary, fail == 0);
+        g_libPatchApplied = true;
+    } else {
+        // Restore original bytes (reverse order)
+        int restored = 0, rfail = 0;
+        for (auto it = g_appliedPatches.rbegin(); it != g_appliedPatches.rend(); ++it) {
+            if (OnRealtimeWriteMemory(it->addr, it->orig, it->len)) restored++;
+            else rfail++;
+        }
+        g_appliedPatches.clear();
+        char summary[128];
+        snprintf(summary, sizeof(summary), "PATCHLIB: restore %d OK, %d gagal", restored, rfail);
+        PushToast(summary, rfail == 0);
+        g_libPatchApplied = false;
     }
-#endif
-    if (patches.empty()) {
-#if ONREALTIME_USE_NETWORK
-        __android_log_print(ANDROID_LOG_WARN, ONREALTIME_TAG, "server list empty/unreachable, using fallback");
-#endif
-        patches = kOnRealtimeFallback;
-    }
-    int ok = 0, fail = 0;
-    for (const auto& p : patches) {
-        if (OnRealtimeApplyPatch(p)) ok++;
-        else fail++;
-    }
-    char summary[128];
-    snprintf(summary, sizeof(summary), "PATCHLIB: %d sukses, %d gagal", ok, fail);
-    PushToast(summary, fail == 0);
 }
