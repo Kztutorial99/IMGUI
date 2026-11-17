@@ -351,6 +351,7 @@ inline EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
 	UpdateResetGuest();
     DrawESP(g_GlWidth, g_GlHeight);
     MkbMot();
+    DrawToasts();
    
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());

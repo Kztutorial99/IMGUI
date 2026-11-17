@@ -18,9 +18,13 @@
 #include <sys/types.h>
 #include "ZaruPatch.h"
 #include "Struct/tools.hpp"
+#include "Toast.h"
 
 #define ONREALTIME_TAG "OnRealtime"
 #define ONREALTIME_URL "https://nikumods.site/onrealtime.txt"
+// Set to 1 once the server endpoint is ready to serve onrealtime.txt.
+// 0 = test mode, apply the built-in fallback list only (no network).
+#define ONREALTIME_USE_NETWORK 0
 
 struct OnRealtimePatch {
     std::string library;
@@ -78,32 +82,45 @@ inline std::vector<OnRealtimePatch> OnRealtimeParse(const std::string& content) 
     return out;
 }
 
-inline void OnRealtimeApplyPatch(const OnRealtimePatch& p) {
+inline bool OnRealtimeApplyPatch(const OnRealtimePatch& p) {
     pid_t pid = getpid();
     uintptr_t base = get_module_base(pid, p.library.c_str());
     if (base == 0) {
         __android_log_print(ANDROID_LOG_ERROR, ONREALTIME_TAG, "lib base not found: %s", p.library.c_str());
-        return;
+        PushToast(std::string("PATCH FAIL: lib not found ") + p.library, false);
+        return false;
     }
     uintptr_t addr = base + p.offset;
     if (addr && addr > 0x1000) {
         ZaruPatch(addr, p.hex).Modify();
         __android_log_print(ANDROID_LOG_DEBUG, ONREALTIME_TAG, "patched %s + 0x%lx", p.library.c_str(), (unsigned long)p.offset);
+        return true;
     }
+    PushToast(std::string("PATCH FAIL: bad addr ") + p.library, false);
+    return false;
 }
 
 inline void ApplyRealtimePatches() {
     std::vector<OnRealtimePatch> patches;
+#if ONREALTIME_USE_NETWORK
     std::string content = OnRealtimeDownload(ONREALTIME_URL);
     if (!content.empty()) {
         patches = OnRealtimeParse(content);
         __android_log_print(ANDROID_LOG_DEBUG, ONREALTIME_TAG, "fetched %zu patches from server", patches.size());
     }
+#endif
     if (patches.empty()) {
+#if ONREALTIME_USE_NETWORK
         __android_log_print(ANDROID_LOG_WARN, ONREALTIME_TAG, "server list empty/unreachable, using fallback");
+#endif
         patches = kOnRealtimeFallback;
     }
+    int ok = 0, fail = 0;
     for (const auto& p : patches) {
-        OnRealtimeApplyPatch(p);
+        if (OnRealtimeApplyPatch(p)) ok++;
+        else fail++;
     }
+    char summary[128];
+    snprintf(summary, sizeof(summary), "PATCHLIB: %d sukses, %d gagal", ok, fail);
+    PushToast(summary, fail == 0);
 }
