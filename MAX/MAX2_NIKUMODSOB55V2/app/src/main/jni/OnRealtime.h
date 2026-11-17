@@ -20,14 +20,6 @@
 #include <sys/types.h>
 #include <android/log.h>
 #include <curl/curl.h>
-#ifndef NIKU_HARNESS
-#define ONREALTIME_HAVE_TOGGLE 1
-#endif
-#ifdef NIKU_HARNESS
-extern bool LibPatch;
-#else
-bool LibPatch = false;
-#endif
 #include "ZaruPatch.h"
 #include "Struct/tools.hpp"
 #include "Toast.h"

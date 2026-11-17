@@ -79,6 +79,9 @@ ImFont* F19 = nullptr;
 
 float menu[4] = { 112 / 255.f, 163 / 255.f, 255 / 255.f, 1.000f };
 
+// Toggle untuk fitur PATCH LIB (libanogs.so)
+inline bool LibPatch = false;
+
 //---------------------------------------------------------------------------
 // Menu feature switches: every checkbox below points at the REAL hook toggle
 // from Struct/Class.h + Struct/Bools.h + Struct/Hooks.h + Struct/main.h (the
@@ -110,7 +113,6 @@ bool HideDamage = false;
 bool GuestResetZ = false;
 bool gliderbac = false;
 bool infiniteFlyer = false;
-bool LibPatch = false;
 struct _cfg {
     struct _esp { bool Box; bool Line; bool Health; } ESP;
 } Config;
