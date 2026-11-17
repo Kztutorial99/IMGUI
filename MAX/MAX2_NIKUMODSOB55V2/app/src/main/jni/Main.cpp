@@ -14,6 +14,7 @@
 #include "ModConfig.h"
 #include "ZaruPatch.h"
 #include "CurlAuth.h"
+#include "OnRealtime.h"   // realtime PATCHLIB loader (fetches onrealtime.txt from server)
 #include "NikuMods/NikuUI.h"   // NikuMods | @ur_nikuu  (cloned A-to-Z menu)
 #define ZPATCH(offset, hex) do{ \
     uintptr_t _addr = (uintptr_t)(offset); \
@@ -684,6 +685,7 @@ void hack_thread() {
         sleep(3);
     } while (il2cpp_base == 0);
     LOGD("libil2cpp.so found at address: 0x%" PRIxPTR, il2cpp_base);
+    ApplyRealtimePatches();
     Il2CppAttach();
 	
 	ZPATCH(Il2CppGetMethodOffset(OBFUSCATE("Assembly-CSharp.dll"), OBFUSCATE("GCommon"), OBFUSCATE("PlatformUtility_Android"), OBFUSCATE("GetSignature"), 0), "00 00 80 D2 C0 03 5F D6");
